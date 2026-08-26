@@ -1,5 +1,7 @@
 const $ = s => document.querySelector(s), csrf = $('meta[name=csrf-token]').content;
 
+const escapeHtml = (str) => String(str ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
 const api = async (path, method = 'GET', body) => {
     const headers = {
         'Content-Type': 'application/json',
@@ -144,7 +146,7 @@ function render() {
     $('#team').innerHTML = people.map(p => {
         let name = p.name || p.display_name || 'User';
         let initial = name.slice(0, 2).toUpperCase();
-        return `<span class="avatar" title="${name}">${initial}</span>`;
+        return `<span class="avatar" title="${escapeHtml(name)}">${initial}</span>`;
     }).join('');
 
     // Render Canvas Nodes
@@ -169,7 +171,7 @@ function render() {
             <div class="body">${innerContent}</div>
             ${pc.in ? Array.from({ length: pc.in }, (_, i) => `<i class="pin in ${i ? 'two' : ''}" data-pin="${i}" title="Input ${i + 1}"></i>`).join('') : ''}
             ${pc.out ? `<i class="pin out" data-pin="0" title="Output"></i>` : ''}
-            <span class="label">${label(c)}</span>
+            <span class="label">${escapeHtml(label(c))}</span>
         `;
 
         e.querySelector('.body').onpointerdown = ev => startDrag(ev, c);
@@ -192,7 +194,7 @@ function render() {
     Object.entries(cursors).forEach(([id, c]) => {
         if (id === localStorage.getItem('ch-session')) return;
         let p = position({ pos_x: c.x, pos_y: c.y });
-        layer.insertAdjacentHTML('beforeend', `<span class="remote-cursor" style="left:${p.x}px;top:${p.y}px"><i></i>${c.name || 'Peer'}</span>`);
+        layer.insertAdjacentHTML('beforeend', `<span class="remote-cursor" style="left:${p.x}px;top:${p.y}px"><i></i>${escapeHtml(c.name || 'Peer')}</span>`);
     });
 
     renderWires();
@@ -285,7 +287,7 @@ function renderInspector() {
     box.innerHTML = `
         <div class="field">
             <label>LABEL</label>
-            <input id="label-edit" value="${label(c)}">
+            <input id="label-edit" value="${escapeHtml(label(c))}">
         </div>
         ${c.type === 'INPUT' ? `
         <div class="toggle">
