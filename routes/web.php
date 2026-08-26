@@ -18,6 +18,8 @@ Route::prefix('api')->group(function () {
     Route::post('circuits', [CircuitController::class, 'store']);
     Route::get('circuits/{circuit}', [CircuitController::class, 'show']);
     Route::post('circuits/{circuit}/join', [CircuitController::class, 'join']);
+    Route::post('circuits/{circuit}/demo', [CircuitController::class, 'loadDemo']);
+    Route::post('circuits/{circuit}/clear', [CircuitController::class, 'clear']);
     Route::post('circuits/{circuit}/components', [CircuitController::class, 'component']);
     Route::patch('components/{component}', [CircuitController::class, 'updateComponent']);
     Route::delete('components/{component}', [CircuitController::class, 'removeComponent']);

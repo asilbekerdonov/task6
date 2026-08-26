@@ -16,6 +16,8 @@ window.Echo = new Echo({
 
 window.joinCircuitPresence = (circuitId, sessionUuid, handlers) => {
     window.Echo.leave(`circuit.${circuitId}`);
+    window.Echo.options.auth = window.Echo.options.auth || {};
+    window.Echo.options.auth.headers = window.Echo.options.auth.headers || {};
     window.Echo.options.auth.headers['X-Session-Uuid'] = sessionUuid;
     return window.Echo.join(`circuit.${circuitId}`)
         .here(handlers.here)
@@ -24,4 +26,10 @@ window.joinCircuitPresence = (circuitId, sessionUuid, handlers) => {
         .listen('.circuit.changed', handlers.changed)
         .listenForWhisper('cursor', handlers.cursor)
         .error(handlers.error);
+};
+
+window.bindEchoStateChange = (callback) => {
+    if (window.Echo?.connector?.pusher?.connection) {
+        window.Echo.connector.pusher.connection.bind('state_change', callback);
+    }
 };
