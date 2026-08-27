@@ -150,24 +150,51 @@ button {
   color: var(--text-main);
 }
 
-.join-card input {
+.join-card input, .join-card select, .modal-form input, .modal-form select {
   display: block;
   width: 100%;
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 14px 16px;
+  padding: 12px 14px;
   background: var(--bg-card);
   color: white;
-  font-size: 16px;
+  font-size: 14px;
   font-family: 'JetBrains Mono', monospace;
-  margin-top: 10px;
+  margin-top: 8px;
   outline: none;
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 
-.join-card input:focus {
+.join-card input:focus, .join-card select:focus, .modal-form input:focus, .modal-form select:focus {
   border-color: var(--accent-cyan);
   box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.2);
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.modal-form {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.modal-form label {
+  font: 600 12px 'JetBrains Mono';
+  color: var(--text-dim);
+  text-transform: uppercase;
+}
+
+.modal-form .actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 8px;
 }
 
 .hint {

@@ -25,7 +25,7 @@ const api = async (path, method = 'GET', body) => {
 
 const gates = ['INPUT', 'OUTPUT', 'AND', 'OR', 'NOT', 'XOR', 'NOR', 'NAND'];
 let board = null, selected = null, armed = null, values = {}, drag = null;
-let poll = null, channel = null, remoteUsers = null, cursors = {}, heartbeat = null;
+let poll = null, channel = null, remoteUsers = null, cursors = {}, heartbeat = null, prevCircuitId = null;
 let currentRevision = 0;
 
 const sessionUuid = () => localStorage.getItem('ch-session');
@@ -210,9 +210,8 @@ function renderWires() {
         let b = state().components.find(c => c.id === w.to_component_id);
         if (!a || !b) return;
 
-        let A = position(a), B = position(b);
-        let x1 = A.x + 108, y1 = A.y + 28;
-        let x2 = B.x, y2 = B.y + (w.to_pin ? 44 : 28);
+        let x1 = a.pos_x + 108, y1 = a.pos_y + 28;
+        let x2 = b.pos_x, y2 = b.pos_y + (w.to_pin ? 44 : 28);
         let mx = (x1 + x2) / 2;
 
         let high = values[a.id];
@@ -373,8 +372,8 @@ function run() {
     
     let rows = state().components.filter(c => c.type === 'OUTPUT').map(c => `
         <div class="signal-row">
-            <span>${label(c)}</span>
-            <b class="value ${values[c.id] ? 'one' : ''}">${values[c.id] ? '1 · HIGH' : '0 · LOW'}</b>
+            <span>${escapeHtml(label(c))}</span>
+            <b class="value ${values[c.id] ? 'one' : ''}">${values[c.id] === undefined ? 'NO SIGNAL' : (values[c.id] ? '1 · HIGH' : '0 · LOW')}</b>
         </div>
     `).join('');
 
@@ -410,8 +409,8 @@ function truth() {
         <table class="truth-table">
             <thead>
                 <tr>
-                    ${ins.map(c => `<th>${label(c)}</th>`).join('')}
-                    ${outs.map(c => `<th style="color:var(--accent-amber);">${label(c)}</th>`).join('')}
+                    ${ins.map(c => `<th>${escapeHtml(label(c))}</th>`).join('')}
+                    ${outs.map(c => `<th style="color:var(--accent-amber);">${escapeHtml(label(c))}</th>`).join('')}
                 </tr>
             </thead>
             <tbody>
@@ -462,7 +461,7 @@ async function clearBoard() {
     toast('Board cleared.');
 }
 
-function exportSvg() {
+async function exportPdf() {
     const svg = $('#wires');
     const nodes = $('#nodes');
     const w = board?.circuit?.canvas_width || 1200;
@@ -505,21 +504,34 @@ function exportSvg() {
       <g transform="translate(${c.pos_x}, ${c.pos_y})">
         <rect width="108" height="56" class="gate-box ${t}"/>
         <text x="54" y="28" class="gate-text">${txt}</text>
-        <text x="54" y="70" class="gate-label">${label(c)}</text>
+        <text x="54" y="70" class="gate-label">${escapeHtml(label(c))}</text>
         <circle cx="0" cy="28" r="6" class="pin-point"/>
         <circle cx="108" cy="28" r="6" class="pin-point"/>
       </g>`;
   }).join('')}
 </svg>`;
 
-    const blob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${board?.circuit?.name || 'circuit'}-schematic.svg`;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast('Vector SVG schematic downloaded.');
+    const host = document.createElement('div');
+    host.style.position = 'absolute';
+    host.style.left = '-99999px';
+    host.style.top = '0';
+    host.innerHTML = svgData;
+    document.body.appendChild(host);
+    const svgEl = host.firstElementChild;
+
+    try {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({
+            orientation: w >= h ? 'landscape' : 'portrait',
+            unit: 'pt',
+            format: [w, h]
+        });
+        await window.svg2pdf.svg2pdf(svgEl, doc, { x: 0, y: 0, width: w, height: h });
+        doc.save(`${board?.circuit?.name || 'circuit'}-schematic.pdf`);
+        toast('PDF schematic downloaded.');
+    } finally {
+        host.remove();
+    }
 }
 
 async function refresh(targetRevision = null) {
@@ -551,6 +563,11 @@ function connectRealtime() {
 
     remoteUsers = null;
     cursors = {};
+
+    if (window.Echo && prevCircuitId != null && prevCircuitId !== board.circuit.id) {
+        window.Echo.leave(`circuit.${prevCircuitId}`);
+    }
+    prevCircuitId = board.circuit.id;
 
     channel = window.joinCircuitPresence(board.circuit.id, localStorage.getItem('ch-session'), {
         here: users => {
@@ -659,7 +676,7 @@ $('#run').onclick = () => {
 $('#truth').onclick = truth;
 $('#demo').onclick = () => load3InverterDemo().catch(e => toast(e.message));
 $('#clear').onclick = () => clearBoard().catch(e => toast(e.message));
-$('#export').onclick = exportSvg;
+$('#export').onclick = () => exportPdf().catch(e => toast(e.message));
 
 $('#new-circuit').onclick = async () => {
     let name = prompt('Name for this new board:');

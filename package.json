@@ -17,7 +17,9 @@
         "@laravel/multiplex": "^0.4.1"
     },
     "dependencies": {
+        "jspdf": "^4.2.1",
         "laravel-echo": "^2.4.0",
-        "pusher-js": "^8.6.0"
+        "pusher-js": "^8.6.0",
+        "svg2pdf.js": "^2.7.0"
     }
 }

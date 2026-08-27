@@ -24,12 +24,39 @@
                 <p class="micro">Zero setup. Instant collaboration for up to 5 remote peers.<br>Enter your name to launch or connect to a live board.</p>
             </div>
             <div class="join-card">
-                <p class="eyebrow">VISUAL IDENTIFIER</p>
+                <p class="eyebrow">WORKSPACE ACCESS</p>
+                
                 <label>
-                    What should the room call you?
+                    Your Visual Identifier
                     <input id="name" maxlength="48" placeholder="e.g. Ada Lovelace" autocomplete="off">
                 </label>
-                <p class="hint">If your name matches an active teammate, we'll append a clean numbered identifier.</p>
+                
+                <label style="margin-top: 16px;">
+                    Select Board
+                    <select id="lobby-circuit-select">
+                        <option value="new">+ Create New Board...</option>
+                    </select>
+                </label>
+
+                <div id="new-board-fields" class="form-row">
+                    <label>
+                        Board Name
+                        <input id="new-circuit-name" maxlength="80" value="Team Signal Lab" placeholder="e.g. Lab 1">
+                    </label>
+                    <label>
+                        Grid Size
+                        <select id="new-circuit-grid">
+                            <option value="10">10 px (Fine)</option>
+                            <option value="20" selected>20 px (Standard)</option>
+                            <option value="30">30 px (Medium)</option>
+                            <option value="40">40 px (Wide)</option>
+                            <option value="50">50 px (Coarse)</option>
+                        </select>
+                    </label>
+                </div>
+
+                <p class="hint">Duplicate names automatically receive an identifier suffix (e.g. John 2).</p>
+                
                 <button id="continue" class="primary">
                     Launch Studio <span>→</span>
                 </button>
@@ -44,7 +71,9 @@
                 <span class="mark">⌁</span> CIRCUIT<span>HUB</span>
             </div>
             <div class="crumb">
-                <span id="circuit-name">Signal Board</span>
+                <select id="switch-board-select" style="background:transparent;border:0;color:var(--text-main);font-weight:700;font-family:'JetBrains Mono';cursor:pointer;outline:none;">
+                    <option value="" disabled selected>Switch Board...</option>
+                </select>
                 <span id="sync-status" class="status-pill">
                     <span class="status-dot"></span>
                     <span id="sync-text">LIVE</span>
@@ -52,6 +81,7 @@
             </div>
             <div class="team" id="team"></div>
             <button id="new-circuit" class="text-btn">+ New Board</button>
+            <button id="exit-lobby" class="text-btn" style="color:var(--text-dim);">Lobby</button>
         </header>
 
         <div class="shell">
@@ -81,7 +111,7 @@
                     <div class="actions">
                         <button id="demo" class="demo-btn">★ Load 3-Inverter (2 NOTs)</button>
                         <button id="truth">Truth Table</button>
-                        <button id="export">Export SVG / PDF</button>
+                        <button id="export">Export PDF</button>
                         <button id="clear">Clear</button>
                         <button id="run" class="run">▶ Run Circuit</button>
                     </div>
@@ -141,6 +171,33 @@
     <button class="close-modal">Close Window</button>
 </dialog>
 
+<!-- NEW BOARD MODAL -->
+<dialog id="create-modal">
+    <form id="create-board-form" class="modal-form" method="dialog">
+        <h3 style="margin:0;font-size:18px;">Create New Board</h3>
+        <label>
+            Board Name
+            <input id="modal-circuit-name" maxlength="80" value="New Logic Schematic" required>
+        </label>
+        <label>
+            Grid Size
+            <select id="modal-circuit-grid">
+                <option value="10">10 px (Fine)</option>
+                <option value="20" selected>20 px (Standard)</option>
+                <option value="30">30 px (Medium)</option>
+                <option value="40">40 px (Wide)</option>
+                <option value="50">50 px (Coarse)</option>
+            </select>
+        </label>
+        <div class="actions">
+            <button type="button" id="cancel-create-board" class="text-btn">Cancel</button>
+            <button type="submit" class="primary" style="margin:0;width:auto;padding:8px 16px;">Create Board</button>
+        </div>
+    </form>
+</dialog>
+
+<script src="/vendor/jspdf.umd.min.js"></script>
+<script src="/vendor/svg2pdf.umd.min.js"></script>
 <script src="/circuithub.js"></script>
 </body>
 </html>
