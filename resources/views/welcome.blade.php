@@ -5,8 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>CircuitHub — Collaborative Logic Studio</title>
-    <link rel="stylesheet" href="/circuithub.css">
-    @vite('resources/js/app.js')
+    @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body>
 <main id="app">
@@ -199,6 +198,5 @@
 
 <script src="/vendor/jspdf.umd.min.js"></script>
 <script src="/vendor/svg2pdf.umd.min.js"></script>
-<script src="/circuithub.js"></script>
 </body>
 </html>
