@@ -535,6 +535,9 @@ button {
   pointer-events: none;
 }
 
+[hidden] { display: none !important; }
+.empty-state[hidden] { display: none !important; }
+
 .empty-state b {
   color: var(--text-muted);
   font-size: 15px;
@@ -551,6 +554,8 @@ button {
 }
 
 .node:active { cursor: grabbing; }
+
+.node.dragging { transition: none !important; cursor: grabbing !important; }
 
 .node .body {
   height: 100%;
@@ -818,20 +823,22 @@ dialog::backdrop {
 /* CURSORS & TOASTS */
 .remote-cursor {
   position: absolute;
-  z-index: 20;
+  z-index: 25;
   pointer-events: none;
   color: #f1f5f9;
-  font: 600 10px 'JetBrains Mono';
+  font: 600 11px 'JetBrains Mono';
   white-space: nowrap;
   transform: translate(6px, 6px);
   display: flex;
   align-items: center;
   gap: 6px;
-  background: rgba(15, 23, 42, 0.85);
-  padding: 3px 8px;
-  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.92);
+  padding: 3px 9px;
+  border-radius: 14px;
   border: 1px solid var(--accent-cyan);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  box-shadow: 0 4px 14px rgba(0,0,0,0.6);
+  transition: left 0.06s linear, top 0.06s linear;
+  will-change: left, top;
 }
 
 .remote-cursor i {
@@ -856,4 +863,25 @@ dialog::backdrop {
   font: 500 12px 'JetBrains Mono';
   box-shadow: 0 8px 24px rgba(0,0,0,0.5);
   z-index: 999;
+}
+
+@media (max-width: 1200px) {
+  .shell { grid-template-columns: 160px 1fr 220px; }
+  .actions button { padding: 6px 10px; font-size: 11px; }
+  .actions .demo-btn { font-size: 11px; }
+}
+
+@media (max-width: 960px) {
+  .shell { grid-template-columns: 140px 1fr; }
+  .right-panel { display: none; }
+  .canvas-frame { overflow: auto; }
+  .canvas { min-width: 960px; min-height: 600px; }
+}
+
+@media (max-width: 768px) {
+  .lobby-grid { grid-template-columns: 1fr; gap: 32px; margin-top: 4vh; }
+  .hero h1 { font-size: 38px; }
+  .topbar { padding: 0 12px; gap: 12px; }
+  .shell { grid-template-columns: 1fr; }
+  .left-panel { display: none; }
 }

@@ -6,19 +6,52 @@ window.Pusher = Pusher;
 window.Echo = new Echo({
     broadcaster: 'reverb',
     key: import.meta.env.VITE_REVERB_APP_KEY,
-    wsHost: import.meta.env.VITE_REVERB_HOST,
-    wsPort: import.meta.env.VITE_REVERB_PORT ?? 80,
+    wsHost: import.meta.env.VITE_REVERB_HOST || (window.location.hostname || '127.0.0.1'),
+    wsPort: Number(import.meta.env.VITE_REVERB_PORT || 8080),
     wssPort: import.meta.env.VITE_REVERB_PORT ?? 443,
-    forceTLS: (import.meta.env.VITE_REVERB_SCHEME ?? 'https') === 'https',
+    forceTLS: false,
     enabledTransports: ['ws', 'wss'],
-    authEndpoint: '/api/realtime/auth',
+    authorizer: (channel, options) => {
+        return {
+            authorize: (socketId, callback) => {
+                const sessionUuid = localStorage.getItem('ch-session');
+                const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+
+                fetch('/api/realtime/auth', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-Session-Uuid': sessionUuid || '',
+                        'X-CSRF-TOKEN': csrfToken || '',
+                    },
+                    body: JSON.stringify({
+                        socket_id: socketId,
+                        channel_name: channel.name,
+                        session_uuid: sessionUuid,
+                    })
+                })
+                .then(async response => {
+                    if (!response.ok) {
+                        const errorData = await response.json().catch(() => ({}));
+                        throw new Error(errorData.message || `Auth failed (${response.status})`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    callback(null, data);
+                })
+                .catch(error => {
+                    console.error('[Echo Auth Error]', error);
+                    callback(error, null);
+                });
+            }
+        };
+    }
 });
 
 window.joinCircuitPresence = (circuitId, sessionUuid, handlers) => {
     window.Echo.leave(`circuit.${circuitId}`);
-    window.Echo.options.auth = window.Echo.options.auth || {};
-    window.Echo.options.auth.headers = window.Echo.options.auth.headers || {};
-    window.Echo.options.auth.headers['X-Session-Uuid'] = sessionUuid;
     return window.Echo.join(`circuit.${circuitId}`)
         .here(handlers.here)
         .joining(handlers.joining)

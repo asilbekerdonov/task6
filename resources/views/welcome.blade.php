@@ -131,6 +131,7 @@
                             </defs>
                         </svg>
                         <div id="nodes"></div>
+                        <div id="cursors"></div>
                         <div id="empty" class="empty-state">
                             <b>Canvas is empty</b>
                             <span>Select a gate on the left or load the 3-Inverter demonstration.</span>

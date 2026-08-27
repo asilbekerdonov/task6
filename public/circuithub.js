@@ -177,7 +177,8 @@ function render() {
     
     $('#team').innerHTML = people.map(p => {
         let name = p.name || p.display_name || 'User';
-        let initial = name.slice(0, 2).toUpperCase();
+        const numMatch = name.match(/\d+$/);
+        const initial = numMatch ? (name[0].toUpperCase() + numMatch[0]) : name.slice(0, 2).toUpperCase();
         return `<span class="avatar" title="${escapeHtml(name)}">${initial}</span>`;
     }).join('');
 
@@ -221,15 +222,38 @@ function render() {
         layer.append(e);
     });
 
-    // Render Remote Collaborator Cursors
+    renderCursors();
+    renderWires();
+    renderInspector();
+}
+
+function renderCursors() {
+    let layer = $('#cursors') || $('#nodes');
+    if (!layer) return;
+    
+    // Remove stale cursor elements
+    layer.querySelectorAll('.remote-cursor').forEach(el => {
+        const id = el.id.replace('cursor-', '');
+        if (!cursors[id] || id === localStorage.getItem('ch-session')) {
+            el.remove();
+        }
+    });
+
+    // Update / create active cursors
     Object.entries(cursors).forEach(([id, c]) => {
         if (id === localStorage.getItem('ch-session')) return;
         let p = position({ pos_x: c.x, pos_y: c.y });
-        layer.insertAdjacentHTML('beforeend', `<span class="remote-cursor" style="left:${p.x}px;top:${p.y}px"><i></i>${escapeHtml(c.name || 'Peer')}</span>`);
+        let el = document.getElementById(`cursor-${id}`);
+        if (!el) {
+            el = document.createElement('span');
+            el.id = `cursor-${id}`;
+            el.className = 'remote-cursor';
+            el.innerHTML = `<i></i>${escapeHtml(c.name || 'Peer')}`;
+            layer.appendChild(el);
+        }
+        el.style.left = `${p.x}px`;
+        el.style.top = `${p.y}px`;
     });
-
-    renderWires();
-    renderInspector();
 }
 
 function renderWires() {
@@ -279,21 +303,26 @@ async function connect(ev, c, pin) {
 
 function startDrag(ev, c) {
     ev.preventDefault();
-    drag = { c, startX: ev.clientX, startY: ev.clientY, ox: c.pos_x, oy: c.pos_y };
+    selected = c.id;
+    renderInspector();
+    drag = { c, startX: ev.clientX, startY: ev.clientY, ox: c.pos_x, oy: c.pos_y, moved: false };
     window.addEventListener('pointermove', moveDrag);
     window.addEventListener('pointerup', endDrag, { once: true });
 }
 
 function moveDrag(ev) {
     if (!drag) return;
+    const dx = ev.clientX - drag.startX;
+    const dy = ev.clientY - drag.startY;
+    if (!drag.moved && Math.hypot(dx, dy) <= 4) return;
+    drag.moved = true;
     let w = board?.circuit?.canvas_width || 1200;
     let h = board?.circuit?.canvas_height || 720;
     let scaleX = w / $('#canvas').clientWidth;
     let scaleY = h / $('#canvas').clientHeight;
-    let grid = board.circuit.grid_size;
 
-    drag.c.pos_x = Math.max(0, Math.min(1160, Math.round((drag.ox + (ev.clientX - drag.startX) * scaleX) / grid) * grid));
-    drag.c.pos_y = Math.max(0, Math.min(680, Math.round((drag.oy + (ev.clientY - drag.startY) * scaleY) / grid) * grid));
+    drag.c.pos_x = Math.max(0, Math.min(1160, drag.ox + dx * scaleX));
+    drag.c.pos_y = Math.max(0, Math.min(680, drag.oy + dy * scaleY));
     render();
 }
 
@@ -301,8 +330,15 @@ async function endDrag() {
     window.removeEventListener('pointermove', moveDrag);
     if (!drag) return;
     let c = drag.c;
+    let moved = drag.moved;
     drag = null;
-    await api(`components/${c.id}`, 'PATCH', { pos_x: c.pos_x, pos_y: c.pos_y }).catch(e => toast(e.message));
+    if (moved) {
+        const grid = board.circuit.grid_size;
+        c.pos_x = Math.round(c.pos_x / grid) * grid;
+        c.pos_y = Math.round(c.pos_y / grid) * grid;
+        render();
+        await api(`components/${c.id}`, 'PATCH', { pos_x: c.pos_x, pos_y: c.pos_y }).catch(e => toast(e.message));
+    }
 }
 
 function renderInspector() {
@@ -595,6 +631,28 @@ function startFallback() {
     }, 2500);
 }
 
+function updateRemoteCursor(data) {
+    if (!data || data.session_uuid === localStorage.getItem('ch-session')) return;
+    cursors[data.session_uuid] = data;
+    
+    let layer = $('#cursors') || $('#nodes');
+    if (!layer) return;
+    
+    let el = document.getElementById(`cursor-${data.session_uuid}`);
+    let p = position({ pos_x: data.x, pos_y: data.y });
+    
+    if (!el) {
+        el = document.createElement('span');
+        el.id = `cursor-${data.session_uuid}`;
+        el.className = 'remote-cursor';
+        layer.appendChild(el);
+    }
+    
+    el.innerHTML = `<i></i>${escapeHtml(data.name || 'Peer')}`;
+    el.style.left = `${p.x}px`;
+    el.style.top = `${p.y}px`;
+}
+
 function connectRealtime() {
     if (!window.joinCircuitPresence) return startFallback();
     if (poll) {
@@ -623,6 +681,8 @@ function connectRealtime() {
         leaving: user => {
             remoteUsers = (remoteUsers || []).filter(x => x.session_uuid !== user.session_uuid);
             delete cursors[user.session_uuid];
+            const el = document.getElementById(`cursor-${user.session_uuid}`);
+            if (el) el.remove();
             render();
         },
         changed: event => {
@@ -630,10 +690,7 @@ function connectRealtime() {
             refresh(event?.revision).catch(startFallback);
         },
         cursor: data => {
-            if (data.session_uuid !== localStorage.getItem('ch-session')) {
-                cursors[data.session_uuid] = data;
-                render();
-            }
+            updateRemoteCursor(data);
         },
         error: () => startFallback()
     });
@@ -656,13 +713,13 @@ function connectRealtime() {
 // Remote cursor whisper broadcast
 let cursorTimer = 0;
 $('#canvas').addEventListener('pointermove', ev => {
-    if (!channel || Date.now() - cursorTimer < 70) return;
+    if (!channel || Date.now() - cursorTimer < 35) return;
     cursorTimer = Date.now();
     let p = screenToModel(ev.clientX, ev.clientY);
     channel.whisper('cursor', {
         x: p.pos_x,
         y: p.pos_y,
-        name: localStorage.getItem('ch-name'),
+        name: board?.display_name || localStorage.getItem('ch-display-name') || localStorage.getItem('ch-name') || 'Peer',
         session_uuid: localStorage.getItem('ch-session')
     });
 });
@@ -678,6 +735,9 @@ async function joinCircuit(circuitId) {
     });
 
     localStorage.setItem('ch-session', p.session_uuid);
+    if (p.display_name) {
+        localStorage.setItem('ch-display-name', p.display_name);
+    }
     board = p;
     currentRevision = board.circuit?.revision || 0;
 
