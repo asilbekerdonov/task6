@@ -129,9 +129,41 @@ function updateSyncStatus(status, isFallback = false) {
     }
 }
 
+async function loadCircuitOptions() {
+    let circuits = await api('circuits').catch(() => []);
+    
+    // Lobby select
+    let lobbySelect = $('#lobby-circuit-select');
+    if (lobbySelect) {
+        let opts = `<option value="new">+ Create New Board...</option>`;
+        circuits.forEach(c => {
+            opts += `<option value="${c.id}">${escapeHtml(c.name)} (${c.grid_size}px grid)</option>`;
+        });
+        lobbySelect.innerHTML = opts;
+        if (circuits.length > 0) {
+            lobbySelect.value = circuits[0].id;
+            $('#new-board-fields').style.display = 'none';
+        } else {
+            lobbySelect.value = 'new';
+            $('#new-board-fields').style.display = 'grid';
+        }
+    }
+
+    // Topbar switch select
+    let switchSelect = $('#switch-board-select');
+    if (switchSelect) {
+        let opts = `<option value="" disabled>Switch Board...</option>`;
+        circuits.forEach(c => {
+            let isCurrent = board && board.circuit?.id === c.id;
+            opts += `<option value="${c.id}" ${isCurrent ? 'selected' : ''}>${escapeHtml(c.name)}</option>`;
+        });
+        switchSelect.innerHTML = opts;
+    }
+}
+
 function render() {
     if (!board) return;
-    $('#circuit-name').textContent = $('#board-title').textContent = board.circuit.name;
+    $('#board-title').textContent = board.circuit.name;
     $('#grid-readout').textContent = board.circuit.grid_size;
     $('#canvas').style.backgroundSize = `${board.circuit.grid_size}px ${board.circuit.grid_size}px`;
 
@@ -178,7 +210,6 @@ function render() {
         e.querySelector('.body').onclick = ev => {
             if (!drag) {
                 if (c.type === 'INPUT') {
-                    // Quick toggle on click for inputs!
                     toggleInputValue(c);
                 }
                 selected = c.id;
@@ -462,8 +493,6 @@ async function clearBoard() {
 }
 
 async function exportPdf() {
-    const svg = $('#wires');
-    const nodes = $('#nodes');
     const w = board?.circuit?.canvas_width || 1200;
     const h = board?.circuit?.canvas_height || 720;
 
@@ -520,15 +549,27 @@ async function exportPdf() {
     const svgEl = host.firstElementChild;
 
     try {
-        const { jsPDF } = window.jspdf;
-        const doc = new jsPDF({
-            orientation: w >= h ? 'landscape' : 'portrait',
-            unit: 'pt',
-            format: [w, h]
-        });
-        await window.svg2pdf.svg2pdf(svgEl, doc, { x: 0, y: 0, width: w, height: h });
-        doc.save(`${board?.circuit?.name || 'circuit'}-schematic.pdf`);
-        toast('PDF schematic downloaded.');
+        if (window.jspdf && window.svg2pdf) {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF({
+                orientation: w >= h ? 'landscape' : 'portrait',
+                unit: 'pt',
+                format: [w, h]
+            });
+            await window.svg2pdf.svg2pdf(svgEl, doc, { x: 0, y: 0, width: w, height: h });
+            doc.save(`${board?.circuit?.name || 'circuit'}-schematic.pdf`);
+            toast('PDF schematic downloaded.');
+        } else {
+            // Fallback to SVG download
+            const blob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${board?.circuit?.name || 'circuit'}-schematic.svg`;
+            a.click();
+            URL.revokeObjectURL(url);
+            toast('SVG schematic downloaded.');
+        }
     } finally {
         host.remove();
     }
@@ -626,14 +667,12 @@ $('#canvas').addEventListener('pointermove', ev => {
     });
 });
 
-async function enter() {
+async function joinCircuit(circuitId) {
     let name = $('#name').value.trim();
     if (!name) return toast('Add a name to continue.');
     localStorage.setItem('ch-name', name);
 
-    let circuits = await api('circuits');
-    let c = circuits[0] || await api('circuits', 'POST', { name: 'Team Signal Board', grid_size: 20 });
-    let p = await api(`circuits/${c.id}/join`, 'POST', {
+    let p = await api(`circuits/${circuitId}/join`, 'POST', {
         name,
         session_uuid: localStorage.getItem('ch-session') || null
     });
@@ -645,16 +684,51 @@ async function enter() {
     $('#lobby').hidden = true;
     $('#workspace').hidden = false;
 
+    await loadCircuitOptions();
     render();
     run();
     startHeartbeat();
     connectRealtime();
 }
 
+async function createAndJoinCircuit(name, gridSize) {
+    let userName = $('#name').value.trim();
+    if (!userName) return toast('Add a name to continue.');
+    localStorage.setItem('ch-name', userName);
+
+    let c = await api('circuits', 'POST', {
+        name: name || 'Engineering Signal Lab',
+        grid_size: +gridSize || 20
+    });
+
+    await joinCircuit(c.id);
+}
+
+async function enter() {
+    let choice = $('#lobby-circuit-select').value;
+    if (choice === 'new') {
+        let boardName = $('#new-circuit-name').value.trim();
+        let gridSize = $('#new-circuit-grid').value;
+        await createAndJoinCircuit(boardName, gridSize);
+    } else {
+        await joinCircuit(choice);
+    }
+}
+
 // BUTTON HANDLERS
 $('#continue').onclick = () => enter().catch(e => toast(e.message));
 $('#name').addEventListener('keydown', e => e.key === 'Enter' && enter().catch(x => toast(x.message)));
 $('#name').value = localStorage.getItem('ch-name') || '';
+
+$('#lobby-circuit-select').onchange = e => {
+    $('#new-board-fields').style.display = e.target.value === 'new' ? 'grid' : 'none';
+};
+
+$('#switch-board-select').onchange = e => {
+    if (e.target.value) {
+        joinCircuit(e.target.value).catch(err => toast(err.message));
+    }
+};
 
 $('#palette').innerHTML = gates.map(g => `
     <button data-gate="${g}">
@@ -678,20 +752,33 @@ $('#demo').onclick = () => load3InverterDemo().catch(e => toast(e.message));
 $('#clear').onclick = () => clearBoard().catch(e => toast(e.message));
 $('#export').onclick = () => exportPdf().catch(e => toast(e.message));
 
-$('#new-circuit').onclick = async () => {
-    let name = prompt('Name for this new board:');
-    if (!name) return;
-    let c = await api('circuits', 'POST', { name, grid_size: 20 });
-    let p = await api(`circuits/${c.id}/join`, 'POST', {
-        name: localStorage.getItem('ch-name'),
-        session_uuid: localStorage.getItem('ch-session')
-    });
-    board = p;
-    currentRevision = board.circuit?.revision || 0;
-    render();
-    run();
-    startHeartbeat();
-    connectRealtime();
+$('#new-circuit').onclick = () => {
+    $('#create-modal').showModal();
+};
+
+$('#cancel-create-board').onclick = () => {
+    $('#create-modal').close();
+};
+
+$('#create-board-form').onsubmit = async e => {
+    e.preventDefault();
+    let name = $('#modal-circuit-name').value.trim();
+    let grid = $('#modal-circuit-grid').value;
+    $('#create-modal').close();
+    await createAndJoinCircuit(name, grid).catch(err => toast(err.message));
+};
+
+$('#exit-lobby').onclick = () => {
+    if (window.Echo && board?.circuit?.id) {
+        window.Echo.leave(`circuit.${board.circuit.id}`);
+    }
+    leaveSession();
+    if (heartbeat) { clearInterval(heartbeat); heartbeat = null; }
+    if (poll) { clearInterval(poll); poll = null; }
+    board = null;
+    $('#workspace').hidden = true;
+    $('#lobby').hidden = false;
+    loadCircuitOptions();
 };
 
 $('.close-modal').onclick = () => $('#modal').close();
@@ -714,7 +801,10 @@ window.addEventListener('beforeunload', leaveSession);
 
 document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
-        if (!heartbeat) startHeartbeat();
-        else pingSession();
+        if (!heartbeat && board) startHeartbeat();
+        else if (board) pingSession();
     }
 });
+
+// Initial load
+loadCircuitOptions();
